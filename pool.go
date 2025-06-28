@@ -199,6 +199,20 @@ func (p *Pool) WithMasterShards(keys ...string) (map[*redis.Client][]string, err
 	return mapClients, nil
 }
 
+// GetMasterShards returns master connects for shards
+func (p *Pool) GetMasterShards() ([]*redis.Client, error) {
+	if factory, ok := p.connFactory.(*ShardConnFactory); ok {
+		clients := make([]*redis.Client, 0, len(factory.shards))
+		for _, shard := range factory.shards {
+			conn, _ := shard.getMasterConn()
+			clients = append(clients, conn)
+		}
+		return clients, nil
+	}
+	conn, _ := p.connFactory.getMasterConn()
+	return []*redis.Client{conn}, nil
+}
+
 // Pipeline returns pipeline for HA configuration, to get a pipeline for shards use WithMasterShards
 func (p *Pool) Pipeline() (redis.Pipeliner, error) {
 	if _, ok := p.connFactory.(*ShardConnFactory); ok {
@@ -288,6 +302,14 @@ func (p *Pool) SetRange(ctx context.Context, key string, offset int64, value str
 		return newErrorIntCmd(err)
 	}
 	return conn.SetRange(ctx, key, offset, value)
+}
+
+func (p *Pool) SetArgs(ctx context.Context, key string, value interface{}, a redis.SetArgs) *redis.StatusCmd {
+	conn, err := p.connFactory.getMasterConn(key)
+	if err != nil {
+		return newErrorStatusCmd(err)
+	}
+	return conn.SetArgs(ctx, key, value, a)
 }
 
 func (p *Pool) StrLen(ctx context.Context, key string) *redis.IntCmd {
@@ -552,6 +574,38 @@ func (p *Pool) Expire(ctx context.Context, key string, expiration time.Duration)
 		return newErrorBoolCmd(err)
 	}
 	return conn.Expire(ctx, key, expiration)
+}
+
+func (p *Pool) ExpireNX(ctx context.Context, key string, expiration time.Duration) *redis.BoolCmd {
+	conn, err := p.connFactory.getMasterConn(key)
+	if err != nil {
+		return newErrorBoolCmd(err)
+	}
+	return conn.ExpireNX(ctx, key, expiration)
+}
+
+func (p *Pool) ExpireXX(ctx context.Context, key string, expiration time.Duration) *redis.BoolCmd {
+	conn, err := p.connFactory.getMasterConn(key)
+	if err != nil {
+		return newErrorBoolCmd(err)
+	}
+	return conn.ExpireXX(ctx, key, expiration)
+}
+
+func (p *Pool) ExpireGT(ctx context.Context, key string, expiration time.Duration) *redis.BoolCmd {
+	conn, err := p.connFactory.getMasterConn(key)
+	if err != nil {
+		return newErrorBoolCmd(err)
+	}
+	return conn.ExpireGT(ctx, key, expiration)
+}
+
+func (p *Pool) ExpireLT(ctx context.Context, key string, expiration time.Duration) *redis.BoolCmd {
+	conn, err := p.connFactory.getMasterConn(key)
+	if err != nil {
+		return newErrorBoolCmd(err)
+	}
+	return conn.ExpireLT(ctx, key, expiration)
 }
 
 // MExpire gives the result for each group of keys
@@ -1590,6 +1644,22 @@ func (p *Pool) ZAddXX(ctx context.Context, key string, members ...redis.Z) *redi
 	return conn.ZAddXX(ctx, key, members...)
 }
 
+func (p *Pool) ZAddGT(ctx context.Context, key string, members ...redis.Z) *redis.IntCmd {
+	conn, err := p.connFactory.getMasterConn(key)
+	if err != nil {
+		return newErrorIntCmd(err)
+	}
+	return conn.ZAddGT(ctx, key, members...)
+}
+
+func (p *Pool) ZAddLT(ctx context.Context, key string, members ...redis.Z) *redis.IntCmd {
+	conn, err := p.connFactory.getMasterConn(key)
+	if err != nil {
+		return newErrorIntCmd(err)
+	}
+	return conn.ZAddLT(ctx, key, members...)
+}
+
 func (p *Pool) ZAddCh(ctx context.Context, key string, members ...*redis.Z) *redis.IntCmd {
 	conn, err := p.connFactory.getMasterConn(key)
 	if err != nil {
@@ -1986,4 +2056,38 @@ func (p *Pool) PFMerge(ctx context.Context, dest string, keys ...string) *redis.
 	}
 	conn, _ := p.connFactory.getMasterConn()
 	return conn.PFMerge(ctx, dest, keys...)
+}
+
+func (p *Pool) FlushDB(ctx context.Context) *redis.StatusCmd {
+	if _, ok := p.connFactory.(*HAConnFactory); ok {
+		conn, _ := p.connFactory.getMasterConn()
+		return conn.FlushDB(ctx)
+	}
+	var result *redis.StatusCmd
+	factory := p.connFactory.(*ShardConnFactory)
+	for _, shard := range factory.shards {
+		conn, _ := shard.getMasterConn()
+		result = conn.FlushDB(ctx)
+		if result.Err() != nil {
+			return result
+		}
+	}
+	return result
+}
+
+func (p *Pool) FlushDBAsync(ctx context.Context) *redis.StatusCmd {
+	if _, ok := p.connFactory.(*HAConnFactory); ok {
+		conn, _ := p.connFactory.getMasterConn()
+		return conn.FlushDBAsync(ctx)
+	}
+	var result *redis.StatusCmd
+	factory := p.connFactory.(*ShardConnFactory)
+	for _, shard := range factory.shards {
+		conn, _ := shard.getMasterConn()
+		result = conn.FlushDBAsync(ctx)
+		if result.Err() != nil {
+			return result
+		}
+	}
+	return result
 }

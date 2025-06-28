@@ -1,3 +1,28 @@
+## v3.3.2 (2025-14-04)
+
+- Add GetMasterShards method
+
+## v3.3.1 (2024-22-07)
+
+- Add ExpireNX, ExpireXX, ExpireGT, ExpireLT methods
+
+## v3.3.0 (2024-01-17)
+
+- Rollback to stable version go-redis v9.0.3
+- Add FlushDB/FlushDBAsync methods
+
+## v3.2.2 (2023-12-06)
+
+- Add SetArgs method
+
+## v3.2.1 (2023-12-04)
+
+- Add a couple of variants of ZADD command (ZADD key GT, ZADD key LT)
+
+## v3.2.0 (2023-09-21)
+
+- Update go-redis library to v9.2.0
+
 ## v3.1.1 (2023-06-24)
 
 - Fixed connection selection error for HAConnFactory in MGet/MGetWithGD
